@@ -268,6 +268,13 @@ public abstract class AbstractByteBuf extends ByteBuf {
         }
     }
 
+    // Called after a capacity reduction
+    protected final void trimIndicesToCapacity(int newCapacity) {
+        if (writerIndex() > newCapacity) {
+            setIndex0(Math.min(readerIndex(), newCapacity), newCapacity);
+        }
+    }
+
     @Override
     public ByteBuf ensureWritable(int minWritableBytes) {
         checkPositiveOrZero(minWritableBytes, "minWritableBytes");
@@ -280,6 +287,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
         if (minWritableBytes <= writableBytes()) {
             return;
         }
+        final int writerIndex = writerIndex();
         if (checkBounds) {
             if (minWritableBytes > maxCapacity - writerIndex) {
                 throw new IndexOutOfBoundsException(String.format(
@@ -289,7 +297,14 @@ public abstract class AbstractByteBuf extends ByteBuf {
         }
 
         // Normalize the current capacity to the power of 2.
-        int newCapacity = alloc().calculateNewCapacity(writerIndex + minWritableBytes, maxCapacity);
+        int minNewCapacity = writerIndex + minWritableBytes;
+        int newCapacity = alloc().calculateNewCapacity(minNewCapacity, maxCapacity);
+
+        int fastCapacity = writerIndex + maxFastWritableBytes();
+        // Grow by a smaller amount if it will avoid reallocation
+        if (newCapacity > fastCapacity && minNewCapacity <= fastCapacity) {
+            newCapacity = fastCapacity;
+        }
 
         // Adjust to the new capacity.
         capacity(newCapacity);
@@ -316,7 +331,14 @@ public abstract class AbstractByteBuf extends ByteBuf {
         }
 
         // Normalize the current capacity to the power of 2.
-        int newCapacity = alloc().calculateNewCapacity(writerIndex + minWritableBytes, maxCapacity);
+        int minNewCapacity = writerIndex + minWritableBytes;
+        int newCapacity = alloc().calculateNewCapacity(minNewCapacity, maxCapacity);
+
+        int fastCapacity = writerIndex + maxFastWritableBytes();
+        // Grow by a smaller amount if it will avoid reallocation
+        if (newCapacity > fastCapacity && minNewCapacity <= fastCapacity) {
+            newCapacity = fastCapacity;
+        }
 
         // Adjust to the new capacity.
         capacity(newCapacity);
@@ -1241,7 +1263,44 @@ public abstract class AbstractByteBuf extends ByteBuf {
 
     @Override
     public int indexOf(int fromIndex, int toIndex, byte value) {
-        return ByteBufUtil.indexOf(this, fromIndex, toIndex, value);
+        if (fromIndex <= toIndex) {
+            return firstIndexOf(fromIndex, toIndex, value);
+        } else {
+            return lastIndexOf(fromIndex, toIndex, value);
+        }
+    }
+
+    private int firstIndexOf(int fromIndex, int toIndex, byte value) {
+        fromIndex = Math.max(fromIndex, 0);
+        if (fromIndex >= toIndex || capacity() == 0) {
+            return -1;
+        }
+        checkIndex(fromIndex, toIndex - fromIndex);
+
+        for (int i = fromIndex; i < toIndex; i ++) {
+            if (_getByte(i) == value) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private int lastIndexOf(int fromIndex, int toIndex, byte value) {
+        fromIndex = Math.min(fromIndex, capacity());
+        if (fromIndex < 0 || capacity() == 0) {
+            return -1;
+        }
+
+        checkIndex(toIndex, fromIndex - toIndex);
+
+        for (int i = fromIndex - 1; i >= toIndex; i --) {
+            if (_getByte(i) == value) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     @Override
@@ -1374,30 +1433,38 @@ public abstract class AbstractByteBuf extends ByteBuf {
         checkIndex0(index, fieldLength);
     }
 
-    private static void checkRangeBounds(final int index, final int fieldLength, final int capacity) {
+    private static void checkRangeBounds(final String indexName, final int index,
+            final int fieldLength, final int capacity) {
         if (isOutOfBounds(index, fieldLength, capacity)) {
             throw new IndexOutOfBoundsException(String.format(
-                    "index: %d, length: %d (expected: range(0, %d))", index, fieldLength, capacity));
+                    "%s: %d, length: %d (expected: range(0, %d))", indexName, index, fieldLength, capacity));
         }
     }
 
     final void checkIndex0(int index, int fieldLength) {
         if (checkBounds) {
-            checkRangeBounds(index, fieldLength, capacity());
+            checkRangeBounds("index", index, fieldLength, capacity());
         }
     }
 
     protected final void checkSrcIndex(int index, int length, int srcIndex, int srcCapacity) {
         checkIndex(index, length);
         if (checkBounds) {
-            checkRangeBounds(srcIndex, length, srcCapacity);
+            checkRangeBounds("srcIndex", srcIndex, length, srcCapacity);
         }
     }
 
     protected final void checkDstIndex(int index, int length, int dstIndex, int dstCapacity) {
         checkIndex(index, length);
         if (checkBounds) {
-            checkRangeBounds(dstIndex, length, dstCapacity);
+            checkRangeBounds("dstIndex", dstIndex, length, dstCapacity);
+        }
+    }
+
+    protected final void checkDstIndex(int length, int dstIndex, int dstCapacity) {
+        checkReadableBytes(length);
+        if (checkBounds) {
+            checkRangeBounds("dstIndex", dstIndex, length, dstCapacity);
         }
     }
 

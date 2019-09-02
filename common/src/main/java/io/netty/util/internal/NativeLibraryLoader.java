@@ -138,7 +138,7 @@ public final class NativeLibraryLoader {
         } catch (Throwable ex) {
             suppressed.add(ex);
             logger.debug(
-                    "{} cannot be loaded from java.libary.path, "
+                    "{} cannot be loaded from java.library.path, "
                     + "now trying export to -Dio.netty.native.workdir: {}", name, WORKDIR, ex);
         }
 
@@ -178,7 +178,7 @@ public final class NativeLibraryLoader {
 
             int index = libname.lastIndexOf('.');
             String prefix = libname.substring(0, index);
-            String suffix = libname.substring(index, libname.length());
+            String suffix = libname.substring(index);
 
             tmpFile = File.createTempFile(prefix, suffix, WORKDIR);
             in = url.openStream();
