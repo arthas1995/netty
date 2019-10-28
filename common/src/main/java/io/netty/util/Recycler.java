@@ -17,6 +17,7 @@
 package io.netty.util;
 
 import io.netty.util.concurrent.FastThreadLocal;
+import io.netty.util.internal.ObjectPool;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -194,9 +195,7 @@ public abstract class Recycler<T> {
 
     protected abstract T newObject(Handle<T> handle);
 
-    public interface Handle<T> {
-        void recycle(T object);
-    }
+    public interface Handle<T> extends ObjectPool.Handle<T>  { }
 
     static final class DefaultHandle<T> implements Handle<T> {
         private int lastRecycledId;
@@ -511,6 +510,10 @@ public abstract class Recycler<T> {
                     return null;
                 }
                 size = this.size;
+                if (size <= 0) {
+                    // double check, avoid races
+                    return null;
+                }
             }
             size --;
             DefaultHandle ret = elements[size];
