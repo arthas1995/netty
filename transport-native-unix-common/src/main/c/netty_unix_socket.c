@@ -173,7 +173,7 @@ static void initInetSocketAddressArray(JNIEnv* env, const struct sockaddr_storag
     }
 }
 
-static jbyteArray createInetSocketAddressArray(JNIEnv* env, const struct sockaddr_storage* addr) {
+jbyteArray netty_unix_socket_createInetSocketAddressArray(JNIEnv* env, const struct sockaddr_storage* addr) {
     jsize len = addressLength(addr);
     jbyteArray bArray = (*env)->NewByteArray(env, len);
     if (bArray == NULL) {
@@ -389,6 +389,9 @@ static jobject _recvFrom(JNIEnv* env, jint fd, void* buffer, jint pos, jint limi
     }
 
 #ifdef IP_RECVORIGDSTADDR
+#if !defined(SOL_IP) && defined(IPPROTO_IP)
+#define SOL_IP IPPROTO_IP
+#endif /* !SOL_IP && IPPROTO_IP */
     if (readLocalAddr) {
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
             if (cmsg->cmsg_level == SOL_IP && cmsg->cmsg_type == IP_RECVORIGDSTADDR) {
@@ -587,7 +590,7 @@ static jbyteArray netty_unix_socket_remoteAddress(JNIEnv* env, jclass clazz, jin
     if (getpeername(fd, (struct sockaddr*) &addr, &len) == -1) {
         return NULL;
     }
-    return createInetSocketAddressArray(env, &addr);
+    return netty_unix_socket_createInetSocketAddressArray(env, &addr);
 }
 
 static jbyteArray netty_unix_socket_localAddress(JNIEnv* env, jclass clazz, jint fd) {
@@ -596,7 +599,7 @@ static jbyteArray netty_unix_socket_localAddress(JNIEnv* env, jclass clazz, jint
     if (getsockname(fd, (struct sockaddr*) &addr, &len) == -1) {
         return NULL;
     }
-    return createInetSocketAddressArray(env, &addr);
+    return netty_unix_socket_createInetSocketAddressArray(env, &addr);
 }
 
 static jint netty_unix_socket_newSocketDgramFd(JNIEnv* env, jclass clazz, jboolean ipv6) {
