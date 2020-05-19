@@ -159,8 +159,7 @@ public class SimpleChannelPool implements ChannelPool {
 
     @Override
     public Future<Channel> acquire(final Promise<Channel> promise) {
-        checkNotNull(promise, "promise");
-        return acquireHealthyFromPoolOrNew(promise);
+        return acquireHealthyFromPoolOrNew(checkNotNull(promise, "promise"));
     }
 
     /**
@@ -353,7 +352,7 @@ public class SimpleChannelPool implements ChannelPool {
         } else {
             closeAndFail(channel, new IllegalStateException("ChannelPool full") {
                 @Override
-                public synchronized Throwable fillInStackTrace() {
+                public Throwable fillInStackTrace() {
                     return this;
                 }
             }, promise);

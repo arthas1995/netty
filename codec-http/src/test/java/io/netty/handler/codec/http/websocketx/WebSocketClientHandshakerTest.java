@@ -31,27 +31,20 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.netty.handler.codec.http.HttpScheme;
 import io.netty.util.CharsetUtil;
-import io.netty.util.NetUtil;
+
 import org.junit.Test;
 
 import java.net.URI;
-import java.util.Locale;
 
 import static org.junit.Assert.*;
 
 public abstract class WebSocketClientHandshakerTest {
-    private static final String HTTP_SCHEME_PREFIX = HttpScheme.HTTP + "://";
-    private static final String HTTPS_SCHEME_PREFIX = HttpScheme.HTTPS + "://";
-
     protected abstract WebSocketClientHandshaker newHandshaker(URI uri, String subprotocol, HttpHeaders headers,
                                                                boolean absoluteUpgradeUrl);
 
     protected WebSocketClientHandshaker newHandshaker(URI uri) {
-        HttpHeaders headers = new DefaultHttpHeaders()
-            .add(getOriginHeaderName(), websocketOriginValue(uri));
-        return newHandshaker(uri, null, headers, false);
+        return newHandshaker(uri, null, null, false);
     }
 
     protected abstract CharSequence getOriginHeaderName();
@@ -225,6 +218,30 @@ public abstract class WebSocketClientHandshakerTest {
     }
 
     @Test
+    public void testUpgradeUrlWithoutPath() {
+        URI uri = URI.create("ws://localhost:9999");
+        WebSocketClientHandshaker handshaker = newHandshaker(uri);
+        FullHttpRequest request = handshaker.newHandshakeRequest();
+        try {
+            assertEquals("/", request.uri());
+        } finally {
+            request.release();
+        }
+    }
+
+    @Test
+    public void testUpgradeUrlWithoutPathWithQuery() {
+        URI uri = URI.create("ws://localhost:9999?a=b%20c");
+        WebSocketClientHandshaker handshaker = newHandshaker(uri);
+        FullHttpRequest request = handshaker.newHandshakeRequest();
+        try {
+            assertEquals("/?a=b%20c", request.uri());
+        } finally {
+            request.release();
+        }
+    }
+
+    @Test
     public void testAbsoluteUpgradeUrlWithQuery() {
         URI uri = URI.create("ws://localhost:9999/path%20with%20ws?a=b%20c");
         WebSocketClientHandshaker handshaker = newHandshaker(uri, null, null, true);
@@ -347,7 +364,9 @@ public abstract class WebSocketClientHandshakerTest {
 
         // add values for the headers that are reserved for use in the websockets handshake
         for (CharSequence header : getHandshakeRequiredHeaderNames()) {
-            inputHeaders.add(header, bogusHeaderValue);
+            if (!HttpHeaderNames.HOST.equals(header)) {
+                inputHeaders.add(header, bogusHeaderValue);
+            }
         }
         inputHeaders.add(getProtocolHeaderName(), bogusSubProtocol);
 
@@ -367,32 +386,5 @@ public abstract class WebSocketClientHandshakerTest {
         assertEquals(realSubProtocol, outputHeaders.get(getProtocolHeaderName()));
 
         request.release();
-    }
-
-    static CharSequence websocketOriginValue(URI wsURL) {
-        String scheme = wsURL.getScheme();
-        final String schemePrefix;
-        int port = wsURL.getPort();
-        final int defaultPort;
-        if (WebSocketScheme.WSS.name().contentEquals(scheme)
-            || HttpScheme.HTTPS.name().contentEquals(scheme)
-            || (scheme == null && port == WebSocketScheme.WSS.port())) {
-
-            schemePrefix = HTTPS_SCHEME_PREFIX;
-            defaultPort = WebSocketScheme.WSS.port();
-        } else {
-            schemePrefix = HTTP_SCHEME_PREFIX;
-            defaultPort = WebSocketScheme.WS.port();
-        }
-
-        // Convert uri-host to lower case (by RFC 6454, chapter 4 "Origin of a URI")
-        String host = wsURL.getHost().toLowerCase(Locale.US);
-
-        if (port != defaultPort && port != -1) {
-            // if the port is not standard (80/443) its needed to add the port to the header.
-            // See http://tools.ietf.org/html/rfc6454#section-6.2
-            return schemePrefix + NetUtil.toSocketAddressString(host, port);
-        }
-        return schemePrefix + host;
     }
 }

@@ -344,6 +344,47 @@ public class SniHandlerTest {
         }
     }
 
+    @Test(timeout = 10000)
+    public void testMajorVersionNot3() throws Exception {
+        SslContext nettyContext = makeSslContext(provider, false);
+
+        try {
+            DomainNameMapping<SslContext> mapping = new DomainNameMappingBuilder<SslContext>(nettyContext).build();
+
+            SniHandler handler = new SniHandler(mapping);
+            EmbeddedChannel ch = new EmbeddedChannel(handler);
+
+            // invalid
+            byte[] message = {22, 2, 0, 0, 0};
+            try {
+                // Push the handshake message.
+                ch.writeInbound(Unpooled.wrappedBuffer(message));
+                // TODO(scott): This should fail because the engine should reject zero length records during handshake.
+                // See https://github.com/netty/netty/issues/6348.
+                // fail();
+            } catch (Exception e) {
+                // expected
+            }
+
+            ch.close();
+
+            // Consume all the outbound data that may be produced by the SSLEngine.
+            for (;;) {
+                ByteBuf buf = ch.readOutbound();
+                if (buf == null) {
+                    break;
+                }
+                buf.release();
+            }
+
+            assertThat(ch.finish(), is(false));
+            assertThat(handler.hostname(), nullValue());
+            assertThat(handler.sslContext(), is(nettyContext));
+        } finally {
+            releaseAll(nettyContext);
+        }
+    }
+
     @Test
     public void testSniWithApnHandler() throws Exception {
         SslContext nettyContext = makeSslContext(provider, true);

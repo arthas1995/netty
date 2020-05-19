@@ -17,6 +17,7 @@
 package io.netty.util;
 
 import io.netty.util.internal.EmptyArrays;
+import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.PlatformDependent;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
@@ -150,10 +151,7 @@ public class ResourceLeakDetector<T> {
      * Sets the resource leak detection level.
      */
     public static void setLevel(Level level) {
-        if (level == null) {
-            throw new NullPointerException("level");
-        }
-        ResourceLeakDetector.level = level;
+        ResourceLeakDetector.level = ObjectUtil.checkNotNull(level, "level");
     }
 
     /**
@@ -221,11 +219,7 @@ public class ResourceLeakDetector<T> {
      */
     @Deprecated
     public ResourceLeakDetector(String resourceType, int samplingInterval, long maxActive) {
-        if (resourceType == null) {
-            throw new NullPointerException("resourceType");
-        }
-
-        this.resourceType = resourceType;
+        this.resourceType = ObjectUtil.checkNotNull(resourceType, "resourceType");
         this.samplingInterval = samplingInterval;
     }
 
@@ -280,8 +274,18 @@ public class ResourceLeakDetector<T> {
         }
     }
 
+    /**
+     * When the return value is {@code true}, {@link #reportTracedLeak} and {@link #reportUntracedLeak}
+     * will be called once a leak is detected, otherwise not.
+     *
+     * @return {@code true} to enable leak reporting.
+     */
+    protected boolean needReport() {
+        return logger.isErrorEnabled();
+    }
+
     private void reportLeak() {
-        if (!logger.isErrorEnabled()) {
+        if (!needReport()) {
             clearRefQueue();
             return;
         }

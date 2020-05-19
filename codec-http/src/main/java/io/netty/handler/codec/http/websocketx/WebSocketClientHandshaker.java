@@ -35,6 +35,7 @@ import io.netty.handler.codec.http.HttpResponseDecoder;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.util.NetUtil;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.internal.ObjectUtil;
 
 import java.net.URI;
 import java.nio.channels.ClosedChannelException;
@@ -48,6 +49,8 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
  */
 public abstract class WebSocketClientHandshaker {
 
+    private static final String HTTP_SCHEME_PREFIX = HttpScheme.HTTP + "://";
+    private static final String HTTPS_SCHEME_PREFIX = HttpScheme.HTTPS + "://";
     protected static final int DEFAULT_FORCE_CLOSE_TIMEOUT_MILLIS = 10000;
 
     private final URI uri;
@@ -231,9 +234,7 @@ public abstract class WebSocketClientHandshaker {
      *            Channel
      */
     public ChannelFuture handshake(Channel channel) {
-        if (channel == null) {
-            throw new NullPointerException("channel");
-        }
+        ObjectUtil.checkNotNull(channel, "channel");
         return handshake(channel, channel.newPromise());
     }
 
@@ -498,9 +499,7 @@ public abstract class WebSocketClientHandshaker {
      *            Closing Frame that was received
      */
     public ChannelFuture close(Channel channel, CloseWebSocketFrame frame) {
-        if (channel == null) {
-            throw new NullPointerException("channel");
-        }
+        ObjectUtil.checkNotNull(channel, "channel");
         return close(channel, frame, channel.newPromise());
     }
 
@@ -515,9 +514,7 @@ public abstract class WebSocketClientHandshaker {
      *            the {@link ChannelPromise} to be notified when the closing handshake is done
      */
     public ChannelFuture close(Channel channel, CloseWebSocketFrame frame, ChannelPromise promise) {
-        if (channel == null) {
-            throw new NullPointerException("channel");
-        }
+        ObjectUtil.checkNotNull(channel, "channel");
         channel.writeAndFlush(frame, promise);
         applyForceCloseTimeout(channel, promise);
         return promise;
@@ -569,12 +566,9 @@ public abstract class WebSocketClientHandshaker {
         }
 
         String path = wsURL.getRawPath();
+        path = path == null || path.isEmpty() ? "/" : path;
         String query = wsURL.getRawQuery();
-        if (query != null && !query.isEmpty()) {
-            path = path + '?' + query;
-        }
-
-        return path == null || path.isEmpty() ? "/" : path;
+        return query != null && !query.isEmpty() ? path + '?' + query : path;
     }
 
     static CharSequence websocketHostValue(URI wsURL) {
@@ -598,5 +592,32 @@ public abstract class WebSocketClientHandshaker {
         // if the port is not standard (80/443) its needed to add the port to the header.
         // See http://tools.ietf.org/html/rfc6454#section-6.2
         return NetUtil.toSocketAddressString(host, port);
+    }
+
+    static CharSequence websocketOriginValue(URI wsURL) {
+        String scheme = wsURL.getScheme();
+        final String schemePrefix;
+        int port = wsURL.getPort();
+        final int defaultPort;
+        if (WebSocketScheme.WSS.name().contentEquals(scheme)
+            || HttpScheme.HTTPS.name().contentEquals(scheme)
+            || (scheme == null && port == WebSocketScheme.WSS.port())) {
+
+            schemePrefix = HTTPS_SCHEME_PREFIX;
+            defaultPort = WebSocketScheme.WSS.port();
+        } else {
+            schemePrefix = HTTP_SCHEME_PREFIX;
+            defaultPort = WebSocketScheme.WS.port();
+        }
+
+        // Convert uri-host to lower case (by RFC 6454, chapter 4 "Origin of a URI")
+        String host = wsURL.getHost().toLowerCase(Locale.US);
+
+        if (port != defaultPort && port != -1) {
+            // if the port is not standard (80/443) its needed to add the port to the header.
+            // See http://tools.ietf.org/html/rfc6454#section-6.2
+            return schemePrefix + NetUtil.toSocketAddressString(host, port);
+        }
+        return schemePrefix + host;
     }
 }

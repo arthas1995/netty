@@ -322,7 +322,7 @@ public class Http2ConnectionHandler extends ByteToMessageDecoder implements Http
          * Peeks at that the next frame in the buffer and verifies that it is a non-ack {@code SETTINGS} frame.
          *
          * @param in the inbound buffer.
-         * @return {@code} true if the next frame is a non-ack {@code SETTINGS} frame, {@code false} if more
+         * @return {@code true} if the next frame is a non-ack {@code SETTINGS} frame, {@code false} if more
          * data is required before we can determine the next frame type.
          * @throws Http2Exception thrown if the next frame is NOT a non-ack {@code SETTINGS} frame.
          */
@@ -935,6 +935,7 @@ public class Http2ConnectionHandler extends ByteToMessageDecoder implements Http
         private final ChannelHandlerContext ctx;
         private final ChannelPromise promise;
         private final ScheduledFuture<?> timeoutTask;
+        private boolean closed;
 
         ClosingChannelFutureListener(ChannelHandlerContext ctx, ChannelPromise promise) {
             this.ctx = ctx;
@@ -963,6 +964,14 @@ public class Http2ConnectionHandler extends ByteToMessageDecoder implements Http
         }
 
         private void doClose() {
+            // We need to guard against multiple calls as the timeout may trigger close() first and then it will be
+            // triggered again because of operationComplete(...) is called.
+            if (closed) {
+                // This only happens if we also scheduled a timeout task.
+                assert timeoutTask != null;
+                return;
+            }
+            closed = true;
             if (promise == null) {
                 ctx.close();
             } else {
