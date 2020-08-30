@@ -156,8 +156,6 @@ public abstract class AbstractDiskHttpData extends AbstractHttpData {
                     throw new IOException("Out of size: " + (size + localsize) +
                             " > " + definedSize);
                 }
-                ByteBuffer byteBuffer = buffer.nioBufferCount() == 1 ? buffer.nioBuffer() : buffer.copy().nioBuffer();
-                int written = 0;
                 if (file == null) {
                     file = tempFile();
                 }
@@ -165,11 +163,21 @@ public abstract class AbstractDiskHttpData extends AbstractHttpData {
                     RandomAccessFile accessFile = new RandomAccessFile(file, "rw");
                     fileChannel = accessFile.getChannel();
                 }
-                while (written < localsize) {
-                    written += fileChannel.write(byteBuffer);
+                int remaining = localsize;
+                long position = fileChannel.position();
+                int index = buffer.readerIndex();
+                while (remaining > 0) {
+                    int written = buffer.getBytes(index, fileChannel, position, remaining);
+                    if (written < 0) {
+                        break;
+                    }
+                    remaining -= written;
+                    position += written;
+                    index += written;
                 }
-                size += localsize;
-                buffer.readerIndex(buffer.readerIndex() + written);
+                fileChannel.position(position);
+                buffer.readerIndex(index);
+                size += localsize - remaining;
             } finally {
                 // Release the buffer as it was retained before and we not need a reference to it at all
                 // See https://github.com/netty/netty/issues/1516
@@ -304,13 +312,16 @@ public abstract class AbstractDiskHttpData extends AbstractHttpData {
             while (read < length) {
                 int readnow = fileChannel.read(byteBuffer);
                 if (readnow == -1) {
+                    fileChannel.close();
+                    fileChannel = null;
                     break;
                 }
                 read += readnow;
             }
-        } finally {
+        } catch (IOException e) {
             fileChannel.close();
             fileChannel = null;
+            throw e;
         }
         if (read == 0) {
             return EMPTY_BUFFER;
