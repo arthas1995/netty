@@ -26,7 +26,7 @@
   <groupId>io.netty</groupId>
   <artifactId>netty-parent</artifactId>
   <packaging>pom</packaging>
-  <version>4.1.52.Final-SNAPSHOT</version>
+  <version>4.1.53.Final-SNAPSHOT</version>
 
   <name>Netty</name>
   <url>https://netty.io/</url>
@@ -437,15 +437,6 @@
         <version>1.2.0</version>
       </dependency>
 
-      <!-- Byte code generator - completely optional -->
-      <dependency>
-        <groupId>org.javassist</groupId>
-        <artifactId>javassist</artifactId>
-        <version>3.20.0-GA</version>
-        <scope>compile</scope>
-        <optional>true</optional>
-      </dependency>
-
       <!-- JBoss Marshalling - completely optional -->
       <dependency>
         <groupId>org.jboss.marshalling</groupId>
@@ -728,13 +719,6 @@
   </dependencyManagement>
 
   <dependencies>
-    <!-- Enable Javassist support for all test runs -->
-    <dependency>
-      <groupId>org.javassist</groupId>
-      <artifactId>javassist</artifactId>
-      <scope>test</scope>
-    </dependency>
-
     <!-- Testing frameworks and related dependencies -->
     <dependency>
       <groupId>junit</groupId>
@@ -1196,7 +1180,7 @@
           <dependency>
             <groupId>org.apache.ant</groupId>
             <artifactId>ant</artifactId>
-            <version>1.9.7</version>
+            <version>1.9.15</version>
           </dependency>
           <dependency>
             <groupId>org.apache.ant</groupId>
